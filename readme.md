@@ -1,4 +1,4 @@
-﻿This dzVents script is not made by myself, but as I refer to it in a Readme-file of another script and I can’t find version 1.9 anymore elsewhere online (unfortunately), I decide to put it here. 
+﻿This dzVents script is not made by myself, but as I refer to it in a Readme-file of another script and I can’t find version 1.9 anymore elsewhere online (unfortunately), I decided to put it here. 
 
 If you are the rightful owner or know where it is, so I can link to it there, feel free to raise an issue and I will remove it here.
 
