@@ -1,0 +1,96 @@
+--[[
+    dzVents script to Parse P1 Smart Meter Electricity value into separate Meter Readings.
+    Please note that initially counter today will show wrong value at the GUI until next day
+    To be used for domoticz version >= V4.11305
+
+]] --
+local fetchIntervalMins = 1    -- (Integer) Minutes frequency of this script execution 1 = every minute, 10 = every 10 minutes, etc ) must be one of (1,2,3,4,5,6,10,12,15,20,30)
+local ScriptVersion = '0.1.9' -- domoticz > V4.11305 / dzVents >= 2.4.28
+
+return {
+
+    on =      {
+                        timer = { 'every ' .. fetchIntervalMins .. ' minutes' }
+              },
+
+    logging = {
+                       level = domoticz.LOG_DEBUG,    -- Uncomment this line to override the dzVents global logging setting
+                       marker = 'SME '.. ScriptVersion
+              },
+
+    data = { lastP1 = { initial = {} }},
+
+    execute = function(dz, item)
+
+        -- Add device-names between quotes or device idx without quotes
+        local P1  = dz.devices(652) -- Electra, P1 Smart Meter device (idx or "name") (required)
+        local solarEnergy = dz.devices(171) -- Your solar production kwH device
+
+        -- Enter names / idx for devices you want below these comment-lines
+        -- These devices must be created as new incremental counters. Script might produce wrong values
+        -- when used with existing ones that already contain values
+        -- The remaining lines can be removed or commented
+        --- local usageLow = dz.devices('Verbruik Laag') -- Meter Usage low, Virtual device, counter incremental
+        --- local usageHigh = dz.devices('Verbruik Hoog') -- Meter Usage High, Virtual device, counter incremental
+        --- local returnLow  = dz.devices('Teruglevering Laag')  -- Meter Return Low, Virtual device, counter incremental
+        --- local returnHigh = dz.devices('Teruglevering Hoog')  -- Meter Return High, Virtual device, counter incremental
+
+        -- These devices must be created as Usage (electric)
+        --- local usage = dz.devices('Huidig verbruik')  -- current Usage
+        --- local usageDelivered = dz.devices('Huidige teruglevering')  -- current Return
+        --- local usagePVdelivered = dz.devices(792) -- current Usage PV production -- added to original script
+        local usageReal = dz.devices(83) -- current Usage PV excluded          -- added to original script
+
+        -- This devices must be created as electric (usage + counter) Please note that today will not show a correct value on day 1
+        local realUsage = dz.devices(670) -- Electric (usage + counter)
+
+        -- No changes required below this line ---
+
+        lastP1 = dz.data.lastP1
+
+        local function updateCounter(dv, value, previousValue )
+            if not(dv) then return end
+            if not(previousValue) then
+                dz.log("No previous data for " .. dv.name .. " yet; skipping this run",dz.LOG_DEBUG)
+                return
+            end
+            if dv.counter ~= 0 then
+                value = value - previousValue
+            end
+            dv.updateCounter(value)
+            dz.log("Increment " .. dv.name .. " with: " .. value,dz.LOG_DEBUG)
+        end
+
+        local function updateEnergy(dv, value )
+           if not(dv) then return end
+           dv.updateEnergy(value)
+           dz.log("Set " .. dv.name .. " to: " .. value,dz.LOG_DEBUG)
+        end
+
+        local function updateElectricity(dv, energy, power)
+            if not(dv) then return end
+            dv.updateElectricity( power, energy )
+            dz.log("Set " .. dv.name .. "Energy to: " .. energy .. ' kWH and Power to ' .. power .. ' Watt',dz.LOG_DEBUG)
+        end
+
+        -- Update the devices
+        updateCounter(usageLow, P1.usage1, lastP1.usage1)
+        updateCounter(usageHigh, P1.usage2, lastP1.usage2)
+        updateCounter(returnLow, P1.return1, lastP1.return1)
+        updateCounter(returnHigh, P1.return2, lastP1.return2)
+
+        updateEnergy(usage, P1.usage)
+        updateEnergy(usageDelivered, P1.usageDelivered)
+
+        lastP1.usage1 = P1.usage1
+        lastP1.usage2 = P1.usage2
+        lastP1.return1 = P1.return1
+        lastP1.return2 = P1.return2
+
+        updateElectricity(realUsage, ( solarEnergy.WhTotal + P1.usage1 + P1.usage2 - P1.return1 - P1.return2 ) , ( P1.usage + solarEnergy.actualWatt - P1.usageDelivered )  )
+
+        -- calculate usage with solarEnergy excluded
+        updateEnergy(usageReal, solarEnergy.actualWatt + P1.usage - P1.usageDelivered )
+
+    end
+}
